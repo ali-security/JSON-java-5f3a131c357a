@@ -117,4 +117,40 @@ public class Util {
             );
         }
     }
+
+    /**
+     * Runs the given body on a dedicated thread with a large (8 MB) stack and
+     * returns whatever it threw.
+     * <p>
+     * The test suite may be run with a small stack (for example -Xss512k), on
+     * which a few hundred levels of recursive XML/JSONML parsing can overflow
+     * the stack before a nesting depth limit is reached. Running the body on a
+     * thread with an explicit large stack lets a test tell a deliberate
+     * {@link JSONException} apart from a {@link StackOverflowError}.
+     * @param body the code to run
+     * @return the Throwable thrown by the body, or <code>null</code> if it
+     *      completed normally
+     */
+    public static Throwable throwableFromLargeStack(final Runnable body) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread thread = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    body.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "json-large-stack-test", 8L * 1024L * 1024L);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                "Interrupted while waiting for the large stack test thread", e);
+        }
+        return thrown[0];
+    }
 }
